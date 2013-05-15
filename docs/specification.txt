@@ -1,0 +1,174 @@
+Draft 1 of the "Indexed Text" document specification, covering "source text"
+files, "metadata cache" files, "shared cache" files, and the definition of
+some index marks.
+
+*. Overview
+
+    "Indexed Text" is a document format that focuses on writability,
+        maintining cross-links among multiple documents, and producing
+        predictable output for electronic consumption.
+
+        It is intended to be easy to write using a simple text editor - even
+        one without proper Unicode support.  The price for this flexibility is
+        that the documents need to be processed to turn them from their
+        "source text" form into a final rendered form complete with active
+        cross-links.
+
+        The processing produces at least one "metadata cache" files and may
+        also produce multiple "shared cache" files, all contianing
+        intermediate needed for the cross-linking.
+
+        While this specification does not attempt to describe the details of
+        rendering an "Indexed Text" document into any specific output format,
+        it is intended that all "Indexed Text" documents are rendered in a
+        fixed-width font, faithfully preserving the whitespace choices in the
+        "source text".
+
+*. Document Encoding
+    "source text" documents are encoded using UTF-8.  They do not need to be
+        normalized as a normalization is performed on specific parts as
+        needed.
+
+*. Document Naming
+    "source text" files are expected to use the .itxt extension when read from
+        a filesystem, but this is not required, nor is it ever defaulted.
+        This is to avoid ambiguity if there exist files and/or directories on
+        a filesystem both with and without the .itxt extension.
+
+*. Processing
+    "Indexed Text" documents are processed in two phases, with a
+        pre-processing step.
+
+    The first phase is the Gather phase.  Nothing is rendered in this phase.
+        During the Gather phase:
+        *) each document is processed in isolation, as if it were the only
+            document in the world
+        *) internal metadata is seeded according to the standards
+        *) the document is scanned for index marks
+        *) index marks are NFC normalized
+        *) $display is copied from $data if not explicitly specified
+        *) $data is NFC normalized
+        *) the gather-phase processing is done on all index marks in the order
+            that they appear in the document, this is expected to modify the
+            internal metadata
+        *) when index marks are nested, all inner index marks are processed
+            completely before the outer index mark is processed
+        *) the internal metadata store is written out to one or more "metadata
+            cache" and "shared cache" files, according to the data stores
+            identified in the index marks.
+
+    The second phase is the Render phase, which produces output.
+        During the Render phase:
+        *) the "metadata cache" file is identified for each "source text",
+            which does not need to be present
+        *) if the "source text" file is present then basic checks (e.g.
+            checksum) are done to identify if the "metadata cache" file is
+            current (e.g. the "source text" is different, or the seeded
+            metadata is different).  if the "source text" is not present then
+            the checks pass automatically.
+        *) if the checks do not pass, rendering does not proceed
+        *) the "metadata cache" identifies any additional "source text" and
+            "shared cache" files that need to be included, each getting their
+            own check for being current
+        *) the check for being current, when applied to "shared cache" files
+            implies a check for each document listed in it.  in order to pass
+            every document's "metadata cache" must be found and be current.
+        *) all "metadata cache" and "shared cache" files are checked for being
+            current before any output is produced
+        *) the render-phase processing proceeds according to the order
+            specified in the cache files
+
+*. Index Marks
+    Index marks are identified in source text only when initially processing
+        the document during the Gather phase.  After this initial processing
+        index marks are identified by the generated metadata and source text
+        will not be scanned for index marks.
+
+    For purposes of identifying and delimiting index marks in the source text,
+        matches are performed only on NFC normalized (see
+        http://www.unicode.org/reports/tr15/) extended grapheme clusters (EGC)
+        (see http://www.unicode.org/reports/tr29/).  This means, for example,
+        that a '{' followed by U+034F (COMBINING GRAPHEME JOINER), a combining
+        character with no visible glyph, is not treated the same as an
+        "unadorned" '{' character even though they are visually
+        indistinguishable.
+
+        Aside from allowing a means to 'escape' delimiting characters without
+        altering the visual display of the source text or injecting characters
+        that need to be altered or removed during processing (e.g. '\'), this
+        also ensures that index mark processing behaves consistently for all
+        possible normalizations (or lack thereof) of the source text.
+
+        The Unicode ZERO WIDTH SPACE (U+200B) may also be useful to break up
+        sequences that would otherwise be identified as starting an index
+        mark, also without altering the visual display.
+
+    Index marks are created with the EGC '{' (U+007B) preceeded by a qualifying
+        index mark leader and continuing until the next EGC '}' (U+007D).
+
+    Every Unicode EGC is potentially a qualifying index mark leader with
+        the following exceptions:
+
+        + The 7-bit ASCII character set (code points U+0000 through U+007F,
+            inclusive) without combining characters
+        + Unicode Whitespace (WSpace=Y), with or without combining characters
+        + Unicode Control Characters (General Categories 'Cc', 'Cf', and
+            'Cs'), with or without combining characters
+        + Unicode Separator Characters (General Categories starting with 'Z'),
+            with or without combining characters
+
+    Every qualifying index mark leader preceeding the EGC '{' (U+007B) creates
+        an index mark.
+
+    During the Gather phase unterminated index marks are a fatal error.  It is
+        not possible to have unterminated index marks after the Gather phase.
+
+    During all processing phases it is a fatal error to use an index mark that
+        does not have a defined meaning.
+
+    Index marks may be nested, but only in an explicit $display portion of the
+        index mark.  It is a fatal error to start an index mark in the $data
+        portion of an index mark.
+
+*. A Note About Symbols
+    Index marks utilize symbols that are not on US keyboards.
+        These are all chosen from the list of vim-supported digraphs that are
+        introduced by CONTROL-K.  While there may be other means of typing
+        them, this document lists the vim digraphs which are based on the ones
+        found in RFC 1345.  See ":he digraph" in vim for more information.
+
+    Summary of used digraphs:
+        ¦ (U+00A6) - BB - Broken Bar
+            Used to separate $data from $display in an index mark
+
+        ∅ (U+2205) - /0 - Empty Set
+            Used for the NO-OP index mark
+
+*. Index Mark Format
+    Index marks have the following form:
+        $leader '{' $data [ '¦' $display ] '}'
+
+        $leader - The qualifying Unicode character that identifies the type of
+            index mark.
+
+        $data - Contains the data that is used to direct the processing of the
+            index mark, and presumably turn it into something meaningful.  The
+            interpretation of $data is specific to the type of index mark.
+
+ TODO: standard structure of $data, includes decisions about what data type
+    are supported (e.g. are values allowed to be complex data structures)
+
+        $display - Contains the string of characters that will be displayed
+            when the index mark is rendered.  If not explicitly specified the
+            value of $data is used as $display.  This default value of
+            $display is created during the Gather phase before the
+            gather-phase processing for the index mark.
+
+*. Index Mark Environment
+ TODO: Processing order, revist $display going to Gather-phase processing,
+    data storage available, etc
+
+*. Defined Index Marks
+ TODO: in addition to those already discussed elsewhere, a no-op index mark
+    using the empty set symbol as the leader does nothing and produces no
+    display.

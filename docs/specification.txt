@@ -56,6 +56,15 @@ some index marks.
         *) the internal metadata store is written out to one or more "metadata
             cache" and "shared cache" files, according to the data stores
             identified in the index marks.
+        *) an index mark MUST do one (and only one) of the following:
+            *) remain in the stream to be processed in the Render phase
+            *) return text that replaces it
+            *) return structured $data for an outer mark
+        *) it is an error for a mark to return $data outside of an enclosing
+            mark
+        *) it is an error for a mark to return text or remain in the stream
+            inside an explicit $data segment of an enclosing mark, or inside
+            an implied $data/$dispaly segment
 
     The second phase is the Render phase, which produces output.
         During the Render phase:
@@ -104,7 +113,8 @@ some index marks.
         mark, also without altering the visual display.
 
     Index marks are created with the EGC '{' (U+007B) preceeded by a qualifying
-        index mark leader and continuing until the next EGC '}' (U+007D).
+        index mark leader and continuing until the next EGC '}' (U+007D) not
+        already part of a mark.
 
     Every Unicode EGC is potentially a qualifying index mark leader with
         the following exceptions:
@@ -126,7 +136,9 @@ some index marks.
     During all processing phases it is a fatal error to use an index mark that
         does not have a defined meaning.
 
-    Index marks may be nested, but only in an explicit $display portion of the
+    Index marks may be nested, but if an index mark appears in either an
+        explicit $data portion, or in an implied combined $data/$display, then
+        it will be processed only in the Gather phase.
         index mark.  It is a fatal error to start an index mark in the $data
         portion of an index mark.
 

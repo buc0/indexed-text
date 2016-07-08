@@ -1,0 +1,588 @@
+Thoughts copied from 'temporary.text'
+2013-02-11:
+    What if I were to reimagine the requirements...
+        a: Written primarily in plain text
+        b: Indexes needed: topical, date, keyword
+        c: attachable media
+        d: reference links
+        Perhaps plain text, but with the following PerlPod inspired sequences:
+            L<link>, X<index topic>, but what to choose for introducing the
+            sequences?  something easy to type from anywhere is a hard
+            requirement (but note that vim can be assumed).  something that
+            won't happen very often (if ever) by accident is greatly desired.
+            short, with beginning and ending delimiters is also greatly
+            desired.
+
+2013-02-12:
+        Some possible patterns:
+            * $marker $letter $open_delim $stuff $close_delim
+            * $letter $open_delim $stuff $close_delim
+            * $open_delim $letter $divider $stuff $close_delim
+        Some possible delimiters:
+            * '<' and '>'
+            * '{{{' and '}}}'
+            * '^B' and '^C'
+        Some possible markers:
+            * '\'
+        Some possible dividers:
+            * '-'
+            * ':'
+
+    Also, I while brainstorming about possible delimiters, I remembered that
+        vim has digraph support which may expand my range of easily typable
+        characters.  For example, I had been lamenting the lack of ease of
+        typing Δ and σ.  Now I just need to learn them, especially since they
+        are defined in RFC1345.
+
+2012-02-13:
+    Continuing from yesterday...
+    delimiters:
+        * '«' and '»'
+        * '⇐' and '⇒' (digraphs <= and =>)
+        * '≪' and '≫' (digraphs <* and *>)
+        * '⌊' or '⌈' and '⌉' or '⌋' (digraphs 7<, <7, >7, and 7>)
+        * '〈' or '〉' (digraphs </ and />)
+    markers or dividers:
+        * '='
+        * '¤' (digraph Cu)
+        * '¦' (digraph BB)
+        * '§' (digraph SE)
+        * '' (0x1f, digraph US - unit sep)
+        * '‖' (digraph !2)
+        * '†' (digraph /-)
+        * '‡' (digraph /=)
+        * '※' (digraph :X, reference mark)
+        * '℅' (digraph co, may be confused with %)
+        * '⋮' (digraph :3)
+        * '⋯' (digraph .3)
+        * '✠' (digraph -X)
+        * '∴' (digraph .:)
+        * '∵' (digraph :.)
+        * '≔' (U+2254)
+
+2012-02-14:
+    If the marker is distinctive enough, then the letters and delimiters can
+        be common.  I also have to decide whether or not I want to use
+        different markers for different purposes (e.g. ※ for index entries and
+        § for section headers)
+
+    {x¦Index} {x※Index}
+    {※Index} {§Section} {†Footnote} {‡Link}
+    ※x{Index}
+    ※{Index} §{Section} †{Footnote} ‡{Link}
+    {§Chapter¦Title}
+    §{Chapter¦Title}
+
+    Visually I like the idea of using different symbols for differnt uses.  As
+        a programmer, though, I don't want to limit my expressivity, so I've
+        got an inclination to define a "longhand" notation with specific
+        "shorthand" equivalents.
+
+    For the shorthand I like:
+        $symbol '{' $real [ '¦' $display ] '}'
+        It is explicitly disallowed to have another meta item in $real and
+        explicitly allowed to have another meta item in $display.  The '}',
+        and '¦' can be escaped using '\' to be included literally.  Escaping
+        the '{' with '\' makes the whole squence literal (that is, it's the
+        $symbol '{' together that's the marker, not just $symbol alone).  All
+        non-whitespace values for $symbol are reserved and shall be
+        interpreted as an unknown shorthand meta item.  Unknown meta items
+        will have their $display (which defaults to $real) rendered as plain
+        text.  The interpretation of $real and $display are left up to the
+        semantics defined for that meta item.  Unterminated sequences are
+        treated as literals.
+
+    For the longhand I like:
+        '¤{' $type ':' $real [ '¦' $display ] '}'
+        Thus the longhand form is a specialized version of the shorthand form,
+        with all of the rules for it.  Additionally, $type is not allowed to
+        contain any of '¦', ':', or a nested meta item.  A sqeuence like:
+        '¤{non_colons}' will be interpreted the same as '¤{non_colons:}'.
+
+2012-02-15:
+    Type is explicitly defined to be case insensitive.
+
+    With the notation chosen, I'm defining these meta items:
+        link - ‡ (/=) - create a link to $real, showing $display
+            one outstanding question about links, should they be exclusively
+            HTML links or should I define a way to specify links to notebook
+            sections, whether in the same notebook or in others.  I'd like to
+            have such a way, but I'm wondering if maybe it ought to be
+            something different than a naked HTML link.
+        index - ※ (:X) - create an index entry for $real, showing $display
+            $real needs to be structured so that it allows for variant uses of
+            a term and contexts for the use of the term
+        section - § (SE) - create a section marker for a TOC entry and as a
+            target for links.  There is no implied section length or end of
+            section marker, they always go to the next section marker of equal
+            or higher level.  No, I haven't yet defined what the section
+            hierarchy is.
+        footnote - † (/-) - footnote and/or endnote
+            this one is iffy on whether or not I want to include it.  I might
+            use it instead for a notebook link
+        notebook link - TBD (TBD) - a link to a section in a notebook, if
+            decided to be independent of the link meta item.
+
+2013-02-16:
+    Continuing with the specification:
+        * The input file is UTF-8
+        * The rendering will be in a fixed-width font
+        * All spaces are significant
+
+2013-02-20:
+    Back to the notebook specification:
+    * Literal tabs, if present in displayed text, will be converted into enough
+        spaces to move to the next tab stop (0,8,16,...)
+    * each meta item (I need a better name for them) will be parsed into $type,
+        $real, and $display.  Each $type may have a base handler called for all
+        output formats (e.g. indexing) as well as multiple
+        output-format-specific handlers (one per output format).  The base
+        handler (if any) will be called first with $real and $display and is
+        expected to return a new $real and $display which will be passed to the
+        format-specific handler.  The format-specific handler is expected to
+        return a string that will be included verbatim in the output stream.
+    * to correct an item from 2013-02-16, the standard rendering will be in a
+        fixed-width font, but meta items can define other effects
+
+2013-02-21:
+    What to call these meta items?  What to call the format itself?  What file
+        extension to use?
+        * Annotations.  Annotated text. .ano
+
+    The understanding of $real needs to be given some useful definition.
+        [ $default_key '=' ] [ $value_of_default ] { ',' $key '=' [ $value ] }
+        ',', '=', '}', and '¦' may be escaped with '\' to use them as literals
+        Annotations are not allowed within $real, so any annoation shortcut
+        symbols and '{' do not need to be escaped (but may be)
+
+    Additonal "annotations":
+        * include - used to reference another annotated text file, processing
+            it as a separate file, but merging its index, TOC, and other
+            section metadata into the including document's (after the
+            sub-document is rendered).  can include the document inline or as
+            a link.  by default, forces all section levels to have a minimum
+            of /n/, where /n/ is one more than the current level.  restores
+            the current section level after the inclusion, even if inline,
+            as if there were an explicit '+0,continuation' section_start
+            annotation following the include annotation.
+        * setup - used to prime data for later annotations, e.g. adding custom
+            section level naming schemes
+        * bold
+        * italic - e.g. for using standard mathematical textbook notation for
+            variables, but now I'm getting out of plain text.  I don't want
+            the annotations to become formatting.
+
+    On the document format:
+        * trailing whitespace is ignored
+
+    Annotation Section Start:
+        * Marks the start of a section.  The section continues until a new
+            section of the same, or higher, level is introduced.
+        * $type = section-start
+        * $shortcut = § (SE, u+00a7)
+        * $real
+            * $default_key = 'level'
+            * level -
+                * specifies the "outline" level, with '+' and '-' relative to
+                    the previous section and '=' setting it absolutely
+                * default value = '+0'
+                * ( '+' | '-' | '=' ) \d+
+                * levels <= 0 are treated as 0 (silently)
+            * naming -
+                * specifies the naming scheme to use for levels, there will be
+                    several built-in schems, plus a way to specify one inline
+        * $display = text to display, default styling (if any) may be
+            influenced by the level
+
+2013-02-22:
+    Annotation Section Start (continued):
+        * $real (continued)
+            * numbering -
+                * specifies the numbering scheme to use
+                * when using roman numerals of either case, the unicode
+                    specials for 1 .. 12 will be used (1r, 2r .. 9r, ar, br,
+                    cr, 1R, 2R, .. 9R, aR, bR, cR; u+2170 - u+217b, u+2160 -
+                    u+216b) (note also that u+216c-f and u+217c-f are also
+                    roman numerals: Ⅼ, Ⅽ, Ⅾ, and Ⅿ)
+            * listname=$name -
+                * specifies a list name to use for numbering purposes
+            * continue[=$list]|nocontinue -
+                * indicates whether or not to pick up numbering from the
+                    previous list, if not explicitly specified then the
+                    previous list at the same level (and naming scheme?) is
+                    used
+    * am I making this a combination of a section heading an, a ul/ol, and an
+        li?  is that a bad idea?  I'm not sure of the answer to either.
+    * chapters, sections, and such are usually numbered, so that is a natural
+        fit if I don't want to require explicit numbering
+    * Allowing things to opt-in to named lists seems to make sense, too
+        * e.g. chapter 1, interlude A, chapter 2, chapter 3, interlude B,
+           chapter 4, ...
+
+    Additional annotations:
+        * new page
+        * attach
+
+    Annotated text has no direct control over pagination (except maybe whether
+        it should be pretext-numbered (using lower roman numerals) or using
+        regular numbers, or maybe there are other possibilities, but all of
+        those have to do with the styling and don't require micro-managing of
+        the page numbers)
+
+    If annotated text had "sufficiently powerful" annotations, it might be
+        possible to define only a small number of basic annotations, add in
+        a state-storage layer, and then use annotations to define all the
+        other annotations.  This could aid in extensibility of the system.
+        This would work for the base-level processing of each annotation type,
+        but not necessarily for the display-specific handling.
+
+    As already happens with TeΧ, ConTeΧt, and LaTeΧ (ooh, see me playing with
+        digraphs there and using actual GREEK CAPITAL LETTER CHIs?), there
+        will be a need to cache index and other reference point information.
+
+2013-02-25:
+    Continuing the thinking on cached index, TOC, and other reference
+        information, I'd already been thinking that the index annotation would
+        allow optional specification of which index to use, so it makes sense
+        that the location of index meta-data could also be specified for a
+        named index.  I also think that rather than storing absolute
+        information about where a reference is, relative information should be
+        store, relative to the document level, so that it only has to be
+        recalculated if the containing document is re-processed.  I'm not sure
+        how ¤{include:*} will play with that, though.
+
+    Regarding inclusion:
+        * If the files are processed separately and then the results are
+            included, that will complicate reference points for things after
+            an inclusion, having to refer to things relative to the end of the
+            inclusion.  This is doable, it just needs to be thought out from
+            the start.
+        * If the files are inlined, as in C-style #include, then the
+            referneces are once again easy to calculate, but the semantics of
+            inclusion says that the inclusion changes the way that section
+            level numbers are interpreted.  This requires some sort of
+            boundary to the included text, and the annotated text
+            specification doesn't currently have a way to do that (but I'm
+            thinking one out right now), and the boundary would have to be
+            such that the included document can't end the block.
+        * If files are processed separately, then even the section numbers,
+            section level numbers, and such will need to be stored relative
+            for integration into a larger document.
+
+    Regarding blocks:
+        * one possible block implementation: ¤{block:$real¦$display}, since
+            $display is defined explicitly to allow nested annotations, but
+            now every '}' in $display needs to be escaped, which will make
+            life difficult for the ¤{include} annotation.
+        * another possible block implementation: ¤{block_start:$real} and
+            ¤{block_end:$real}, defined so that $display is never rendered,
+            where the value of $real designates which block is being started
+            and ended.  Thus the ¤{include} annotation can prevent the
+            included text from closing the block by choosing a value for $real
+            that the included text cannot use.  This will allow blocks to
+            overlap without one being a superset of the other, which might be
+            desireable in some cases (thinking here about overlapping blocks
+            of highlighted or bracketed text) because that may happen when
+            annotating text.  But that usage is usually applied to a text
+            /after/ it has been written instead of while it is being written,
+            and this format is for the writing of documents rather than the
+            analysis and critique of them.  So perhaps "Annotated" is the
+            wrong descriptor (although the usage of that word in relation to
+            Java and C# does fit).
+
+2013-02-26:
+    Continuing the thinking on inclusion, blocks, and cached metadata, and
+        throwing in thinking about how the processing will work, I think that
+        there might be room for both types of inclusion (C-style #include and
+        as a separately-processed sub-document), with the "link" type of
+        inclusion that was mentioned on the 21st not being a type of
+        inclusion.  I'm also inclined to declare that C-style inclusion does
+        not change section level semantics like sub-document inclusion does,
+        nor does it create a surrounding block, so something included in that
+        style is literally treated as if it were actually in the original
+        document.  I also think that, while I still explicitly support nesting
+        annotations in the $display of an annotation, I do not want that to be
+        the "usual" case, which is what would happen if block annotations
+        became common and the entire block has to fit in $display.  Thus
+        blocks will have explicit start/end annotations (maybe with some sort
+        of helper syntax in $real to generate unique tags and still match them
+        up with the appropriate closing block annotation).  The inclusion
+        decision effects the generated metadata, with separately processed
+        inclusions stored independently of those that are inlined.  It is
+        specified that the resulting metadata cache is identical for a file
+        processed on its own and for a file processed as a subdocument
+        inclusion.  It is also specified that when a directory is listed for
+        inclusion that it includes all of the .ano files in the directory,
+        sorting them in a UTF-8 canonicalized manner.  Directory inclusion can
+        optionally be recursive, which is defined as a depth-first pre-order
+        traversal.  Sub-document inclusion has loop detection and processes
+        each file in the context of its containing directory.  Inline
+        inclusion does not have loop detection and processes the included
+        contents as if it had originally been in the including document.
+
+    That makes processing an annotated text file into something that is
+        necessarily multi-pass.  The first pass processes the base level of
+        all annotations in all files, producing the cached metadata.  Since
+        the base level processing of an annotation type can modify both $real
+        and $display, that information will have to be stored in the metadata
+        for each annotation.  It may make sense to also include the literal
+        text in a metadata file so that the cached file can be used on its
+        own.  If this is done, then directory inclusion will also
+        automatically include any cached metadata files.  Tools should also
+        allow someone to request that only the first pass be performed on a
+        file (and it's inclusions).  The metadata file should contain enough
+        information that the tool can know whether or not the cached metadata
+        needs to be rebuilt.
+
+2013-02-27:
+    So what makes this "annotated text" format so much better than all the
+        other thigns that are already out there?  The killer feature, I think,
+        can only be the multi-document indexing and linking.  Not even the
+        *TeΧ* formats provide that.
+
+2013-02-28:
+    On the 22nd I talked about making a "sufficiently powerful" annotation
+        that was capable of describing the behavior (the base behavior, at
+        least) of other annotations to eventually make the format something
+        where the only hard built-in is that functionality and all the other
+        annotations can be expressed using that.  I like that idea, but I also
+        think it's premature to start off with that.  I'm going to build up a
+        set of useful annotations with base behaviors and then maybe I'll move
+        forward with creating the programmable annotated text.
+
+    I'm torn.  Do I start writing an annotated text → html translator, or do I
+        try to continue specifying the behavior of the already-identified but
+        still ill-defined annotations?  I'm not sure that I've even completely
+        specified the section annotation.  I'd also like to practice writing
+        something like an RFC by writing up an RFC-like thing for the
+        annotated text document specification.
+
+    In fact.... I could see there being an annotated text → RFC.txt
+        translator.
+
+2013-03-01:
+    Eh, as I've looked at the RFC format some more I'm pretty sure that an
+        annotated text → RFC.txt translator is not a good fit.  Just like PDF
+        and DVI aren't good fits for output.
+
+    Likewise, writing it up in RFC format is a side trip that I don't need to
+        take right now.  I do still want to formalize it though.
+
+2013-03-07:
+    So the question is how to formalize it outside of a translator program
+        without getting bogged down in extra "fluff".
+
+2013-03-14:
+    As I've been working on the specification document, I've decided that I
+        don't want to use the programming standby of escaping characters.
+        That gets messy in text.
+
+2013-03-18:
+    One alternative to escaping is named entities, but as I ponder I wonder if
+        there is any real difference between the two.  Character entities
+        (even if implemented as annotations) are functionally equivalent to
+        escape sequences and seem to suffer the same problems.  Namely, the
+        author has to be fully aware of how many times the text will be
+        processed in order to get the right number of escapes into it.
+
+2013-03-21:
+    In doing a bit of research, I have determined that "annotation" isn't the
+        right term.  I'm not sure what the right term is, though.  I'm leaning
+        towards "indexed text".
+
+2013-04-24:
+    Just learned about vim keymaps -- very handy.
+
+    Just installed unicode.vim
+        (http://www.vim.org/scripts/script.php?script_id=2822)
+        :EnableUnicodeCompletion - to turn it on
+         in insert mode to start a search for a unicode character by name
+            or code point
+        :let g:showDigraphCode=1 - to show digraphs for the character, if any
+        :UnicodeName - shows the name of the unicode character(s) under the
+            cursor (added mapping to corin and cornelius .vimrc files as
+            ALT-u)
+
+2013-04-29:
+    Watching https://www.youtube.com/watch?v=3kEfedtQVOY, "The Science of
+        Insecurity".
+
+        Wierd Machine - a system that is manipulable to do things that it was
+        never intended to do; a system that is more powerful than intended and
+        necessary.  Usually exploited for malicious intent.
+
+        WRT formal language theory, there are Regular, Context Free, Context
+        Sensitive, and Recursively Enumerable.  A parser for a language can
+        guarantee properties of the parsed input only for Regular and Context
+        Free.  Some Context Sensitive languages can be decideable, though.
+
+        Regular == Finate State Machine
+        Context Free == Pushdown Automata (FSM + stack)
+            Can be deterministic or nondeterministic
+        Context Sensitive
+        Recursively Enumerable == Turing Complete
+
+        WRT protocols and document structures, as soon as you have a length
+        field you're at the Context Sensitive level, although only weakly so
+        and thus still decideable (that is, able to positively verify
+        properties of the input data).
+
+        @23:30
+            Every program component that receives input from /others/
+            [emphasis added] has a *recognizer* for *the* *language* *of*
+            *valid* *or* *expected* *inputs*
+
+        All data handoffs are languages and have recognizers.  Better to
+        embrace that fact than to try to ignore it.
+        * Packet structures are a language
+        * Request structures are a language
+        * Heap (memory manager) metadata is a language
+        * Program Stack (call stacks in program execution) is a language
+        * Program Call Graph (really just a clarification of the Stack) is a
+          language
+
+        Implicit recognizers frequently approach things wrong (shotgun
+        parsing, having bits and pieces of the parsing scattered all over)
+        and/or have holes in their coverage of the input language.  Since they
+        are incompletely specified they are necessarily incompletely tested.
+
+        Use the right tool for the job - don't bring a regex to a Context Free
+        fight.
+
+        Generate recognizers from grammars...
+
+        Don't use a more powerful input language than is necessary.
+            Regular
+            Deterministic Context Free
+            ---
+            Nondeterministic Context Free
+            Weakly Context Sensitive
+            ---
+            Strongly Context Sensitive
+            Turing Complete
+
+        Parser equivalence between different systems handling the same
+        language is important and must be tested.  At best the differences can
+        be used to fingerprint implementations, but they probably mean that at
+        least one of the parsers is incomplete and manipulable.
+
+        Note that only Regular and Context Free language parsers can be proven
+        equivalent, and within Context Free only the deterministic ones can be
+        proven.
+
+        Ambiguous specifications (ASN.1 BER cited as an example) make building
+        a secure parser impossible.
+
+        S-expressions (or any other balanced delimiter construct) can be
+        Deterministic Context Free, and they can be used instead of length
+        fields.
+
+        Postel's Principle - Be conservative in what you send; be liberal in
+        what you accept.
+
+        Postel's Principle, Revised - Be conservative in what you send; be
+        definite about what you accept. (that is, treat the input as a
+        langauge with a grammar, using a recognizer built from that grammar,
+        and using the minimally sufficiently powerful type of language).
+
+        Ambiguity (in language/protocol) is Insecurity!
+
+        If your application relies on a Turing-complete protocol, it will take
+        infinite time to secure it
+
+        Don't mistake complexity for functionality
+
+        Parrser Combinators - a newish concept that bears investigation.
+
+        Tools that generate parsers in different languages other than BNF?
+        Parser combinators, started in Haskell, now in Scala, Clojure, Python,
+        Javascript, and possibly others.  Fairly recent invention.  Parser
+        Combinator standard library in Scala is advised for those interested
+        in looking into them.
+
+        Even regular expressions and others can take exponential time, making
+        some things intractable.
+
+        Note that it can be hard to eliminate complexity, HTML5+CSS3 have been
+        proven to be Turing Complete - a markup language and it's display
+        components.  No Javascript needed.
+
+        WRT delimiters as replacements for length fields, the idea is to have
+        delimiters that are not part of the sublanguage that describes values.
+
+        http://langsec.org/
+
+        In the back of my mind while watching this is the lingering thought
+        that even with simple protocols it is possible to build interoperating
+        systems with sufficient complexity as to create a "Weird Machine".
+        This is a theorem of my own that is not yet proven, even in theory.
+
+    The overall question is do I build the "Indexed Text" format with
+        extensibility?  It's hubris to assume that I'll think of everything
+        that everyone (myself included) will ever need.  I don't know that I
+        want to keep racking up the release version number just because I need
+        to add a new type of index mark.  Or is that just laziness talking
+        that will make the document format an intractible unsecure mess down
+        the road?
+
+        One thing that I did just think of is that it is much easier to remove
+        features than it is to add them.
+
+        But, as I mentioned towads the end of my thoughts on the talk, even
+        with a regular input stream it may be possible for the processing of
+        said input stream to produce a "Weird Machine" in the way that the
+        marks are processed.
+
+2013-05-15:
+    Started prototyping components of an indexed-text processing system
+
+2013-08-13:
+    I resumed (started, really) work on prototype0.pl of the Indexed Text
+    format and almost immediately started disliking Perl 5 for the task.  The
+    crux of the dislike is trying to work with EGCs.  Maybe Perl6 will be
+    better....
+
+2013-08-16:
+    Perl6 would be better, except for (from #perl6 on IRC):
+    [Coke]: there are several long-open tickets about how NFG / graphemes are
+    not the default. (mainly because they are not yet I)
+
+    It seems that while they're definitely a thing referred to in the specs
+    (and blogs, etc) that they are not yet real and that all of the grapheme
+    cluster logic relies on the not-yet-implemented NFG system.
+
+
+2016-06-30:
+    ⏏
+    ‹›
+    《》
+    「」
+    『』
+    【】
+    〔〕
+    〖〗
+
+    ｢｣ - in perl6 interpreter-generated output indicates that the contents is an object
+
+    in a perl6 regex $<name> = ( . ) is a named capture
+
+    my regex Foo { . };
+
+    then in another regex: <Foo> - named capture using previously defined Foo
+
+    $/ is a magic variable with the last Match object
+
+    it is a hash and works with the <> modifier
+
+    my token Foo { . };
+
+    my rule Foo { . };
+
+    sub term:<x> - make x into a term-type sub (treated by compiler similar to an embedded constant?)
+
+    ^N - creates a range from 0 .. ( N - 1 )
+
+    the '+' operator knows how to work intelligently on ranges
+
+<-[ \x00 .. \x7f ] -:WSpace -:C -:Z>
+

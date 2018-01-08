@@ -139,8 +139,6 @@ some index marks.
     Index marks may be nested, but if an index mark appears in either an
         explicit $data portion, or in an implied combined $data/$display, then
         it will be processed only in the Gather phase.
-        index mark.  It is a fatal error to start an index mark in the $data
-        portion of an index mark.
 
 *. A Note About Symbols
     Index marks utilize symbols that are not on US keyboards.

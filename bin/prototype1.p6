@@ -27,8 +27,6 @@ use v6;
 # X{Z} is a shortcut form of ¤{type≔Y·Z}
 # ¦X is a shortcut form of display≔X
 # display defaults to an empty string
-# (questionable) {X} is a shortcut for {X≔True}
-# (questionable) {¬X} is a shortcut for {X≔False}
 
 # within a mark, key/value pairs are separated by ·
 #   and the key is separated from the value by ≔
@@ -65,6 +63,26 @@ use v6;
 
 use Grammar::Tracer;
 
+# the exclusive use of tokens is deliberate, as it prevents backtracking and
+# special treatment of whitespace (which I want to be preserved in most places
+# as significant)
+grammar Indexed-Text {
+    token TOP { <indexed-text> };
+    token indexed-text {
+        <unmarked-text> <indexed-text> |
+        <index-mark> <indexed-text> |
+        <empty>
+    };
+    token empty { ^$ };
+    token unmarked-text {
+        <[ \x00 .. \x7f ] +:WSpace +:C +:Z>+ |
+        ?
+    };
+    token index-mark { ? };
+};
+
+=finish
+
 grammar Indexed-Text {
     token TOP {
         <outside-text-or-index-mark>*
@@ -72,11 +90,28 @@ grammar Indexed-Text {
 
     token outside-text-or-index-mark { <outside-text> | <index-mark> };
 
+    # if outside-text can contain things that mark-display or mark-data-value can't,
+    # then you can't just blindly enclose some block of text in ¤{...¦block of text}
+    # or ¤{...·dislay≔block of text·...} without first going through and doing some
+    # sanitizing on it.
+    #   this is undesirable
+    #   + e.g. the text "abc}" would cause problems due to ending the new mark
+    #   + I /could/ make it an error to use an unescaped }, but it isn't an error
+    #     to use an unescaped { as long as it isn't preceeded by a mark leader,
+    #     so this introduces a mismatch where it's easier to use the opening glyph
+    #     than it is the closing glyph.
+    # + I want the natural use of any glyph to mean its natural appearance
+    # + I need the special use of selected glyphs for marks to be easy
     token outside-text {
         <[ \x00 .. \x7f ] +:WSpace +:C +:Z>+ |
         . <!before '{'> |
         . $
     };
+
+    # this is an effort to unmagic the plain '}'
+    # ZWJ isn't strictly necessary, but has been included as a means of making marks very difficult to form accidentally
+    # ZWJ sounds like a good fit for this, but may not work in practice
+    #token index-mark { (<index-mark-leader>) "\c[ZERO WIDTH JOINER]" '{' <mark-body> '}' "\c[ZERO WIDTH JOINER]" $0 };
 
     token index-mark { <index-mark-leader> '{' ~ '}' <mark-body> };
 
@@ -88,15 +123,26 @@ grammar Indexed-Text {
 
     token mark-kv-pair { <mark-data-key> '≔' <mark-data-value> };
 
-    token mark-data-key { <inside-text> };
+    # can't contain ≔ (ends key)
+    # can't contain } (ends mark, with error?)
+    # can't contain ¦ (ends data section, with error?)
+    # can't contain · (automatic error?  or null value?)
+    token mark-data-key { ... };
 
-    token inside-text {  <-[≔¦{}·] -:WSpace -:C -:Z>+ };
+    # can't contain } (ends mark)
+    # can't contain ¦ (ends data section)
+    # can't contain · (ends value)
+    # can contain submarks
+    token mark-data-value { ... };
 
-    token mark-data-value { <inside-text-or-index-mark>* };
-
-    token inside-text-or-index-mark { <inside-text> | <index-mark> };
-
-    token mark-display { <mark-data-value> };
+    # can't contain } (ends mark)
+    # can contain submarks
+    # if can contain ¦ or · then is not completely equivalent to display≔
+    #   further, then if there is ever a mark with no/ignorable side-effects that
+    #   also passes along its display up as text to the enclosing mark (or body)
+    #   then if can contain ¦ or · then that mark can be used as a 'character entity'
+    #   (ala *ML).  Note that this remains an option even if it isn't necessary.
+    token mark-display { ... };
 }
 
 class Gather-Marks {
